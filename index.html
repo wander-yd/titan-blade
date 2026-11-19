@@ -1,0 +1,1201 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>钢索猎手 · 第一人称绳索机动原型</title>
+<style>
+  html,body{margin:0;height:100%;overflow:hidden;background:#000;font-family:system-ui,-apple-system,"PingFang SC","Microsoft YaHei",sans-serif;color:#fff;user-select:none;-webkit-user-select:none}
+  #c{position:fixed;inset:0;width:100%;height:100%;display:block}
+  #hud{position:fixed;inset:0;pointer-events:none}
+  #top{position:absolute;left:18px;top:14px;display:flex;gap:18px;font-size:15px;text-shadow:0 1px 3px #000a;letter-spacing:.5px}
+  #top span{background:#0007;padding:5px 11px;border-radius:6px}
+  #cross{position:absolute;left:50%;top:50%;width:26px;height:26px;margin:-13px 0 0 -13px;opacity:.85}
+  #cross:before,#cross:after{content:"";position:absolute;background:#fff;box-shadow:0 0 3px #000}
+  #cross:before{left:12px;top:0;width:2px;height:26px;clip-path:polygon(0 0,100% 0,100% 38%,0 38%,0 62%,100% 62%,100% 100%,0 100%)}
+  #cross:after{top:12px;left:0;height:2px;width:26px;clip-path:polygon(0 0,38% 0,38% 100%,0 100%,62% 100%,62% 0,100% 0,100% 100%)}
+  #cross.ok:before,#cross.ok:after{background:#7dffb0}
+  #cross i{position:absolute;inset:3px;border:2px solid transparent;border-radius:50%}
+  #cross.ok i{border-color:#7dffb0aa}
+  #msg{white-space:pre-line;position:absolute;left:0;right:0;top:22%;text-align:center;font-size:22px;font-weight:600;text-shadow:0 2px 6px #000c;opacity:0;transition:opacity .25s}
+  #msg.show{opacity:1}
+  #bars{position:absolute;left:18px;bottom:44px;width:240px}
+  .bar{display:flex;align-items:center;gap:8px;margin-top:7px;font-size:13px}
+  .bar label{width:34px;text-shadow:0 1px 2px #000}
+  .bar i{flex:1;height:10px;background:#0009;border-radius:5px;overflow:hidden;box-shadow:0 0 0 1px #fff3}
+  .bar b{display:block;height:100%;width:100%;transition:width .1s}
+  #hp{background:#e5484d}#gas{background:#5ec8ff}#blade{background:#e8e8ee}
+  #hint{position:absolute;left:0;right:0;bottom:12px;text-align:center;font-size:12.5px;opacity:.7;text-shadow:0 1px 2px #000}
+  #radar{position:absolute;right:16px;top:14px;border-radius:50%;background:#0006;box-shadow:0 0 0 2px #fff3}
+  #bite{position:absolute;inset:0;background:#120000;opacity:0}
+  #grabbar{position:absolute;left:50%;top:62%;width:320px;margin-left:-160px;height:14px;background:#000a;border-radius:7px;box-shadow:0 0 0 2px #fff6;display:none;overflow:hidden}
+  #grabbar b{display:block;height:100%;width:0;background:#ffcc33}
+  #grabtxt{position:absolute;left:0;right:0;top:56%;text-align:center;font-size:20px;font-weight:600;text-shadow:0 2px 6px #000c;display:none}
+  #grabvig{position:absolute;inset:0;background:radial-gradient(ellipse at center,#0000 25%,#000d 100%);opacity:0;transition:opacity .3s}
+  #warn{position:absolute;inset:0;background:radial-gradient(ellipse at center,#0000 40%,#ff8a00cc 100%);opacity:0}
+  #dmg{position:absolute;inset:0;background:radial-gradient(ellipse at center,#0000 45%,#e5171fcc 100%);opacity:0}
+  #slash{position:absolute;left:50%;top:50%;width:140%;height:6px;margin:-3px 0 0 -70%;background:linear-gradient(90deg,#fff0,#fff,#fff0);opacity:0;transform:rotate(-24deg)}
+  #slash.go{animation:sl .22s ease-out}
+  @keyframes sl{0%{opacity:.95;transform:rotate(-24deg) translateY(-90px) scaleX(.3)}100%{opacity:0;transform:rotate(-24deg) translateY(90px) scaleX(1)}}
+  #overlay{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;background:#050a12cc;cursor:pointer;z-index:5}
+  #overlay.hide{display:none}
+  .panel{max-width:560px;padding:30px 36px;background:#10161fee;border:1px solid #ffffff22;border-radius:14px;box-shadow:0 20px 60px #000a;text-align:left}
+  .panel h1{margin:0 0 6px;font-size:30px;letter-spacing:2px}
+  .panel p{margin:6px 0;color:#c9d3df;line-height:1.6;font-size:14.5px}
+  .panel ul{margin:12px 0;padding:0;list-style:none;display:grid;grid-template-columns:1fr 1fr;gap:6px 18px;font-size:14px}
+  .panel li b{display:inline-block;min-width:62px;color:#7dd3ff}
+  .panel .go{margin-top:16px;text-align:center;font-size:17px;padding:11px;border-radius:8px;background:#2f7de1}
+  .panel .small{font-size:12.5px;color:#8a97a6}
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<div id="hud">
+  <div id="top"><span id="wave">第 1 波</span><span id="score">得分 0</span><span id="left">怪物 0</span></div>
+  <canvas id="radar" width="150" height="150"></canvas>
+  <div id="cross"><i></i></div>
+  <div id="msg"></div>
+  <div id="bars">
+    <div class="bar"><label>生命</label><i><b id="hp"></b></i></div>
+    <div class="bar"><label>气体</label><i><b id="gas"></b></i></div>
+    <div class="bar"><label>刀刃</label><i><b id="blade"></b></i></div>
+  </div>
+  <div id="hint">左键/右键 钩索 · 空格 收绳/跳 · Shift 喷气 · E 挥刀/被抓时挣脱 · WASD 移动</div>
+  <div id="dmg"></div>
+  <div id="bite"></div>
+  <div id="grabvig"></div>
+  <div id="warn"></div>
+  <div id="grabtxt"></div>
+  <div id="grabbar"><b id="grabfill"></b></div>
+  <div id="slash"></div>
+</div>
+<div id="overlay"><div class="panel" id="panel"></div></div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script>
+(() => {
+'use strict';
+const $ = id => document.getElementById(id);
+const V3 = (x, y, z) => new THREE.Vector3(x, y, z);
+const rnd = (a, b) => a + Math.random() * (b - a);
+
+if (typeof THREE === 'undefined') {
+  $('panel').innerHTML = '<h1>加载失败</h1><p>无法加载 three.js,请检查网络后刷新。</p>';
+  return;
+}
+
+/* ================= 渲染器 / 场景 ================= */
+const canvas = $('c');
+let renderer;
+try {
+  renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
+} catch (e) {
+  $('panel').innerHTML = '<h1>无法启动</h1><p>当前浏览器不支持 WebGL。</p>';
+  return;
+}
+renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+renderer.setSize(innerWidth, innerHeight);
+const scene = new THREE.Scene();
+const FOG = 0xb9c6d2;
+scene.fog = new THREE.Fog(FOG, 200, 1300);
+const camera = new THREE.PerspectiveCamera(72, innerWidth / innerHeight, 0.1, 2600);
+camera.rotation.order = 'YXZ';
+scene.add(camera);
+
+scene.add(new THREE.HemisphereLight(0xdce8ff, 0x6a6a58, 0.95));
+const sun = new THREE.DirectionalLight(0xfff0d2, 0.95);
+sun.position.set(220, 320, 140);
+scene.add(sun);
+
+// 天空
+const sky = (() => {
+  const c = document.createElement('canvas'); c.width = 8; c.height = 256;
+  const g = c.getContext('2d'), gr = g.createLinearGradient(0, 0, 0, 256);
+  gr.addColorStop(0, '#4f7db0'); gr.addColorStop(0.5, '#a9c3dc'); gr.addColorStop(0.62, '#dfe4e6'); gr.addColorStop(1, '#b9c6d2');
+  g.fillStyle = gr; g.fillRect(0, 0, 8, 256);
+  const m = new THREE.Mesh(new THREE.SphereGeometry(1900, 24, 16),
+    new THREE.MeshBasicMaterial({ map: new THREE.CanvasTexture(c), side: THREE.BackSide, fog: false, depthWrite: false }));
+  m.renderOrder = -1; scene.add(m); return m;
+})();
+
+// 地面与街道
+const ground = new THREE.Mesh(new THREE.PlaneGeometry(3200, 3200), new THREE.MeshLambertMaterial({ color: 0x66774c }));
+ground.rotation.x = -Math.PI / 2; scene.add(ground);
+
+const PITCH = 60, NB = 9, CITY = 258;
+const roadMat = new THREE.MeshLambertMaterial({ color: 0x474a50 });
+for (let k = -5; k <= 4; k++) {
+  const c = 30 + k * 60;
+  const a = new THREE.Mesh(new THREE.PlaneGeometry(24, 576), roadMat);
+  a.rotation.x = -Math.PI / 2; a.position.set(c, 0.06, 0); scene.add(a);
+  const b = new THREE.Mesh(new THREE.PlaneGeometry(576, 24), roadMat);
+  b.rotation.x = -Math.PI / 2; b.position.set(0, 0.07, c); scene.add(b);
+}
+
+/* ================= 城市 ================= */
+const buildings = [];
+const winTex = (() => {
+  const c = document.createElement('canvas'); c.width = c.height = 64;
+  const g = c.getContext('2d');
+  g.fillStyle = '#fff'; g.fillRect(0, 0, 64, 64);
+  g.fillStyle = '#5b6573';
+  g.fillRect(9, 12, 17, 22); g.fillRect(38, 12, 17, 22);
+  g.fillStyle = '#8f9aa8';
+  g.fillRect(9, 12, 17, 4); g.fillRect(38, 12, 17, 4);
+  g.fillStyle = '#d9d9d9'; g.fillRect(0, 56, 64, 8);
+  const t = new THREE.CanvasTexture(c); t.wrapS = t.wrapT = THREE.RepeatWrapping;
+  t.anisotropy = 4; return t;
+})();
+const palette = [0xc4b390, 0xa6a6ac, 0xb36c52, 0xd4ccbd, 0x8896a6, 0x9e917c];
+const topMat = new THREE.MeshLambertMaterial({ color: 0x5a5c60 });
+const propMat = new THREE.MeshLambertMaterial({ color: 0x3e4044 });
+
+const roofCols = [0x8a4a3a, 0x6e5a4a, 0x5b4f49, 0x9a5a40];
+const matCache = {};
+function wallMat(col, rx, ry) {
+  rx = Math.max(1, Math.round(rx)); ry = Math.max(1, Math.round(ry));
+  const k = col + '_' + rx + '_' + ry;
+  if (!matCache[k]) { const t = winTex.clone(); t.needsUpdate = true; t.wrapS = t.wrapT = THREE.RepeatWrapping; t.repeat.set(rx, ry);
+    matCache[k] = new THREE.MeshLambertMaterial({ color: col, map: t }); }
+  return matCache[k];
+}
+const roofMats = roofCols.map(c => new THREE.MeshLambertMaterial({ color: c }));
+// 碰撞盒统一从地面算到顶部;上层比下层窄,内部重叠不影响
+function addBox(cx, cz, w, d, y0, y1, mats) {
+  const mesh = new THREE.Mesh(new THREE.BoxGeometry(w, y1 - y0, d), mats);
+  mesh.position.set(cx, (y0 + y1) / 2, cz); scene.add(mesh);
+  buildings.push({ minX: cx - w / 2, maxX: cx + w / 2, minZ: cz - d / 2, maxZ: cz + d / 2, h: y1 });
+}
+function addBuilding(cx, cz, w, d, h, tower) {
+  const col = palette[(Math.random() * palette.length) | 0];
+  const sx = wallMat(col, d / 6, h / 8), sz = wallMat(col, w / 6, h / 8);
+  addBox(cx, cz, w, d, 0, h, [sx, sx, topMat, topMat, sz, sz]);
+  if (tower) return;
+  // 阶梯式屋顶:沿一个方向逐级收窄,模拟坡屋顶
+  const rm = roofMats[(Math.random() * roofMats.length) | 0];
+  const alongX = Math.random() < 0.5, steps = 2 + (Math.random() < 0.5 ? 1 : 0);
+  let y = h;
+  for (let k = 1; k <= steps; k++) {
+    const f = 1 - k / (steps + 1), sh = rnd(1.4, 2.2);
+    if (alongX) addBox(cx, cz, w * f, d * 0.98, y, y + sh, rm); else addBox(cx, cz, w * 0.98, d * f, y, y + sh, rm);
+    y += sh;
+  }
+  if (Math.random() < 0.6) { // 烟囱
+    const cw = rnd(1.2, 2.2), ch = rnd(2, 4);
+    addBox(cx + rnd(-w / 3, w / 3), cz + rnd(-d / 3, d / 3), cw, cw, h, h + ch, propMat);
+  }
+}
+
+const padMat = new THREE.MeshLambertMaterial({ color: 0x8b8880 });
+for (let i = 0; i < NB; i++) for (let j = 0; j < NB; j++) {
+  const cx = (i - 4) * PITCH, cz = (j - 4) * PITCH;
+  const pad = new THREE.Mesh(new THREE.PlaneGeometry(36, 36), padMat);
+  pad.rotation.x = -Math.PI / 2; pad.position.set(cx, 0.04, cz); scene.add(pad);
+  if (i === 4 && j === 4) {
+    addBuilding(0, 0, 22, 22, 55, true);
+    const sp = new THREE.Mesh(new THREE.ConeGeometry(7, 16, 4), new THREE.MeshLambertMaterial({ color: 0x4d5560 }));
+    sp.rotation.y = Math.PI / 4; sp.position.set(0, 55 + 8, 0); scene.add(sp);
+    continue;
+  }
+  if (Math.random() < 0.07) { addBuilding(cx, cz, rnd(14, 18), rnd(14, 18), rnd(38, 50), true); continue; }
+  // 每个街区 2x2 栋民居,高度相近(8~22 米)
+  const base = rnd(9, 18);
+  for (const qx of [-1, 1]) for (const qz of [-1, 1]) if (Math.random() < 0.9)
+    addBuilding(cx + qx * 9, cz + qz * 9, rnd(13, 16.5), rnd(13, 16.5), Math.max(8, Math.min(22, base + rnd(-4, 4))));
+}
+
+// 外围树木与远山
+const treeMat = new THREE.MeshLambertMaterial({ color: 0x3f5f38 });
+for (let i = 0; i < 170; i++) {
+  const a = Math.random() * Math.PI * 2, r = rnd(300, 800);
+  const h = rnd(10, 20);
+  const t = new THREE.Mesh(new THREE.ConeGeometry(rnd(3, 5.5), h, 6), treeMat);
+  t.position.set(Math.cos(a) * r, h / 2, Math.sin(a) * r); scene.add(t);
+}
+const mtMat = new THREE.MeshLambertMaterial({ color: 0x61706c });
+for (let i = 0; i < 22; i++) {
+  const a = (i / 22) * Math.PI * 2 + rnd(-0.1, 0.1), r = rnd(1000, 1250), h = rnd(130, 300);
+  const m = new THREE.Mesh(new THREE.ConeGeometry(rnd(170, 280), h, 5), mtMat);
+  m.position.set(Math.cos(a) * r, h / 2 - 5, Math.sin(a) * r); m.rotation.y = Math.random() * 3; scene.add(m);
+}
+
+// 补给站
+const stations = [];
+const stGeo = new THREE.CylinderGeometry(2.6, 2.6, 16, 10, 1, true);
+const stMat = new THREE.MeshBasicMaterial({ color: 0x5dffa0, transparent: true, opacity: 0.45, side: THREE.DoubleSide, fog: false });
+for (const [sx, sz] of [[150, 150], [-150, 150], [150, -150], [-150, -150]]) {
+  const sm = stMat.clone();
+  const cyl = new THREE.Mesh(stGeo, sm); cyl.position.set(sx, 8, sz); scene.add(cyl);
+  const ring = new THREE.Mesh(new THREE.TorusGeometry(5, 0.35, 6, 20), sm);
+  ring.rotation.x = Math.PI / 2; ring.position.set(sx, 0.6, sz); scene.add(ring);
+  stations.push({ x: sx, z: sz, ring, mat: sm, off: 0 });
+}
+
+/* ================= 游戏状态 ================= */
+const GRAV = 24, RUN = 11, HW = 0.45, PH = 1.8, EYE = 1.65, HOOK_RANGE = 170, STEP = 1 / 120;
+const P = { pos: V3(30, 0, 30), vel: V3(0, 0, 0), yaw: 0, pitch: 0, onGround: true, hp: 100, gas: 100, blade: 100, invul: 0 };
+let state = 'menu';            // menu | playing | paused | dead
+let locked = false, fallback = false;
+let ts = 1, acc = 0, last = performance.now();
+let wave = 0, score = 0, waveTimer = 0, waveState = 'idle';
+let slashCd = 0, slashT = 99, slashHand = 0, shake = 0, dmgFlash = 0, hookHint = 0;
+const keys = {}; const mouse = { x: innerWidth / 2, y: innerHeight / 2 };
+let jumpReq = false, camLag = 0, biteFlash = 0, flungT = 0, warnFlash = 0;
+
+/* ================= 声音 ================= */
+let AC = null, noiseBuf = null, windGain = null, windFilter = null;
+function initAudio() {
+  if (AC) { if (AC.state === 'suspended') AC.resume(); return; }
+  try {
+    AC = new (window.AudioContext || window.webkitAudioContext)();
+    const len = AC.sampleRate * 2; noiseBuf = AC.createBuffer(1, len, AC.sampleRate);
+    const d = noiseBuf.getChannelData(0); for (let i = 0; i < len; i++) d[i] = Math.random() * 2 - 1;
+    const src = AC.createBufferSource(); src.buffer = noiseBuf; src.loop = true;
+    windFilter = AC.createBiquadFilter(); windFilter.type = 'bandpass'; windFilter.frequency.value = 500; windFilter.Q.value = 0.5;
+    windGain = AC.createGain(); windGain.gain.value = 0;
+    src.connect(windFilter); windFilter.connect(windGain); windGain.connect(AC.destination); src.start();
+  } catch (e) { AC = null; }
+}
+function noiseBurst(dur, freq, type, vol) {
+  if (!AC) return;
+  try {
+    const s = AC.createBufferSource(); s.buffer = noiseBuf;
+    const f = AC.createBiquadFilter(); f.type = type; f.frequency.value = freq;
+    const g = AC.createGain(); g.gain.setValueAtTime(vol, AC.currentTime); g.gain.exponentialRampToValueAtTime(0.001, AC.currentTime + dur);
+    s.connect(f); f.connect(g); g.connect(AC.destination); s.start(0, Math.random()); s.stop(AC.currentTime + dur);
+  } catch (e) {}
+}
+function tone(f0, f1, dur, type, vol) {
+  if (!AC) return;
+  try {
+    const o = AC.createOscillator(); o.type = type; o.frequency.setValueAtTime(f0, AC.currentTime);
+    o.frequency.exponentialRampToValueAtTime(f1, AC.currentTime + dur);
+    const g = AC.createGain(); g.gain.setValueAtTime(vol, AC.currentTime); g.gain.exponentialRampToValueAtTime(0.001, AC.currentTime + dur);
+    o.connect(g); g.connect(AC.destination); o.start(); o.stop(AC.currentTime + dur);
+  } catch (e) {}
+}
+
+/* ================= HUD 工具 ================= */
+let msgTimer = 0;
+function msg(t, ms = 1500) {
+  const el = $('msg'); el.textContent = t; el.classList.add('show');
+  clearTimeout(msgTimer); msgTimer = setTimeout(() => el.classList.remove('show'), ms);
+}
+const crossEl = $('cross');
+
+/* ================= 粒子(蒸汽) ================= */
+const parts = [];
+{
+  const g = new THREE.SphereGeometry(1, 5, 4);
+  for (let i = 0; i < 140; i++) {
+    const m = new THREE.Mesh(g, new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0, depthWrite: false }));
+    m.visible = false; scene.add(m);
+    parts.push({ m, v: V3(0, 0, 0), life: 0, max: 1, size: 1 });
+  }
+}
+function emit(pos, n, spd, size, col = 0xffffff) {
+  for (let i = 0, k = 0; i < parts.length && k < n; i++) {
+    const p = parts[i]; if (p.life > 0) continue;
+    p.m.position.copy(pos); p.m.visible = true; p.m.material.color.setHex(col);
+    p.v.set(rnd(-1, 1), rnd(-0.3, 1), rnd(-1, 1)).normalize().multiplyScalar(spd * rnd(0.3, 1));
+    p.v.y += spd * 0.35; p.life = p.max = rnd(0.8, 1.8); p.size = size * rnd(0.6, 1.3); k++;
+  }
+}
+function updateParts(dt) {
+  for (const p of parts) {
+    if (p.life <= 0) continue;
+    p.life -= dt;
+    if (p.life <= 0) { p.m.visible = false; continue; }
+    p.m.position.addScaledVector(p.v, dt); p.v.multiplyScalar(Math.exp(-1.4 * dt));
+    const k = 1 - p.life / p.max;
+    p.m.scale.setScalar(p.size * (1 + k * 2));
+    p.m.material.opacity = 0.4 * (1 - k);
+  }
+}
+
+/* ================= 怪物 ================= */
+// look: legL 腿长, armL 臂长, armW 臂粗, handS 手大小, headS 头大小, hunch 驼背, tilt 歪头, mouthW 嘴宽, teeth 牙, asym 不对称
+const TYPES = {
+  normal:  { name: '普通型', h: 38, speed: 7,  turn: 1.0, hp: 100, dmg: 26, color: 0xd9b99c, radar: '#ff3b3b', look: {} },
+  giant:   { name: '巨型',   h: 56, speed: 5,  turn: 0.75, hp: 170, dmg: 40, color: 0xb98467, radar: '#ff3b3b', look: { headS: 0.85, armW: 1.25, wide: 1.3 },
+             intro: '巨型:血厚、走得慢,一刀砍不死' },
+  grabber: { name: '抓捕型', h: 40, speed: 6,  turn: 1.3, hp: 110, dmg: 26, color: 0xdb8d62, radar: '#ff8a00', look: { armL: 1.3, armW: 0.72, handS: 2.3, headS: 0.85, mouthW: 0.09, teeth: true, grabber: true },
+             intro: '抓捕型:会伸手抓空中的你,被抓住就狂按 E 挣脱' },
+  lunger:  { name: '扑击型', h: 30, speed: 9,  turn: 2.6, hp: 80,  dmg: 30, color: 0xcdc3d0, radar: '#d24bff', look: { legL: 1.25, armL: 1.8, armW: 0.7, headS: 0.8, hunch: 0.75, tilt: 0.35, mouthW: 0.1, teeth: true, asym: true, glowEyes: true },
+             intro: '扑击型(奇行种):蹲下尖啸后飞扑,地上紫圈是落点,扑空后趴地就是破绽' },
+  flinger: { name: '扯绳型', h: 38, speed: 6.5, turn: 1.1, hp: 110, dmg: 26, color: 0xd1a05a, radar: '#ffd400', look: { armW: 1.9, handS: 2.3, hunch: 0.15, chain: true, sepArm: true },
+             intro: '扯绳型:钩在它身上太久会被甩飞,钩索变红就松开' },
+  climber: { name: '爬墙型', h: 26, speed: 8,  turn: 1.6, hp: 80,  dmg: 22, color: 0xa3b0c0, radar: '#3bd1ff', look: { legL: 0.7, armL: 1.6, handS: 1.4, hunch: 0.35, mouthW: 0.08, claws: true },
+             intro: '爬墙型:会爬上屋顶追你,楼顶不再安全' },
+  raider:  { name: '无视型', h: 34, speed: 11, turn: 2.0, hp: 90,  dmg: 26, color: 0xd8d4cc, radar: '#ffffff', look: { headS: 1.5, tilt: 0.55, hunch: 0.6, armL: 1.2, mouthW: 0.12, teeth: true, asym: true, eyeS: 1.5, noTrack: true },
+             intro: '无视型(奇行种):直冲补给点破坏它,先拦住!' }
+};
+const monsters = [];
+let monsterMeshes = [];
+const napeMat = new THREE.MeshBasicMaterial({ color: 0xff4a2a, fog: false });
+const blackMat = new THREE.MeshBasicMaterial({ color: 0x111111 });
+const toothMat = new THREE.MeshLambertMaterial({ color: 0xf2eee0 });
+const chainMat = new THREE.MeshPhongMaterial({ color: 0x5a5d63, flatShading: true });
+const heatRed = new THREE.Color(0xd02a1a);
+const hairMat = new THREE.MeshPhongMaterial({ color: 0x3a2d26, flatShading: true, shininess: 0 });
+const seen = {};
+let grab = null; // { m, t, prog, phase, from, bitten }
+const tmpV = V3(0, 0, 0);
+
+function limbGeo(len, rt, rb, bulge) {
+  const g = new THREE.CylinderGeometry(rt, rb, len, 7, 2), p = g.attributes.position;
+  for (let i = 0; i < p.count; i++) if (Math.abs(p.getY(i)) < 1e-4) { p.setX(i, p.getX(i) * bulge); p.setZ(i, p.getZ(i) * bulge); }
+  g.computeVertexNormals(); return g;
+}
+function headGeo(r) {
+  const g = new THREE.IcosahedronGeometry(1, 1), p = g.attributes.position;
+  for (let i = 0; i < p.count; i++) {
+    const x = p.getX(i), y = p.getY(i), z = p.getZ(i);
+    let X = x * 0.9, Y = y * 1.1, Z = z;
+    if (z > 0.35 && y > 0.1 && y < 0.5) Z *= 1.12;
+    if (z > 0.3 && Math.abs(x) > 0.4 && y > -0.3 && y < 0.2) { X *= 1.08; Z *= 1.05; }
+    if (y < -0.35) { X *= 0.8; Z *= 0.9; }
+    if (z < -0.3) Z *= 1.08;
+    p.setXYZ(i, X * r, Y * r, Z * r);
+  }
+  g.computeVertexNormals(); return g;
+}
+const eyeWhite = new THREE.MeshLambertMaterial({ color: 0xe6e0d0 });
+
+function makeMonster(typeName, x, z) {
+  const T = TYPES[typeName], H = T.h, L = T.look;
+  const legL = L.legL || 1, armL = L.armL || 1, armW = L.armW || 1, handS = L.handS || 1, headS = L.headS || 1;
+  const g = new THREE.Group(); g.rotation.order = 'YXZ';
+  const mon = { g, type: typeName, H, hp: T.hp, max: T.hp, speed: T.speed, turn: T.turn, dmg: T.dmg,
+    yaw: Math.atan2(P.pos.x - x, P.pos.z - z), state: 'walk', t: 0, phase: Math.random() * 6, atkCd: 2 + Math.random(),
+    dead: false, deadT: 0, hit: false, meshes: [], legs: [], knees: [], arms: [], elbows: [], fingers: [], hands: [], eyes: [],
+    baseY: 0, airY: 0, wob: Math.random() * 9, hunch: L.hunch || 0, target: null };
+  const skin = new THREE.MeshPhongMaterial({ color: T.color, flatShading: true, shininess: 6 });
+  const wd = L.wide || 1, amat = L.sepArm ? skin.clone() : skin;
+  if (L.sepArm) { mon.armMat = amat; mon.baseCol = new THREE.Color(T.color); }
+  const ringMat = typeName !== 'normal' ? new THREE.MeshBasicMaterial({ color: new THREE.Color(T.radar) }) : null;
+  const add = (geo, mat, parent, px, py, pz) => {
+    const m = new THREE.Mesh(geo, mat); m.position.set(px, py, pz); parent.add(m);
+    m.userData.monster = mon; mon.meshes.push(m); return m;
+  };
+  const grp = (parent, px, py, pz) => { const o = new THREE.Group(); o.position.set(px, py, pz); parent.add(o); return o; };
+  const hipY = 0.46 * H * legL, half = hipY / 2;
+  for (const s of [-1, 1]) {
+    const lg = grp(g, s * 0.075 * H, hipY, 0); mon.legs.push(lg);
+    add(limbGeo(half, 0.058 * H, 0.04 * H, 1.28), skin, lg, 0, -half / 2, 0);
+    add(new THREE.IcosahedronGeometry(0.044 * H, 0), skin, lg, 0, 0, 0);
+    const kn = grp(lg, 0, -half, 0); mon.knees.push(kn);
+    add(new THREE.IcosahedronGeometry(0.037 * H, 0), skin, kn, 0, 0, 0.004 * H);
+    add(limbGeo(half, 0.038 * H, 0.028 * H, 1.2), skin, kn, 0, -half / 2, 0);
+    add(new THREE.BoxGeometry(0.05 * H, 0.03 * H, 0.1 * H), skin, kn, 0, -half + 0.012 * H, 0.028 * H);
+    if (ringMat) { const rg = new THREE.Mesh(new THREE.CylinderGeometry(0.033 * H, 0.033 * H, 0.012 * H, 8), ringMat); rg.position.set(0, -half + 0.034 * H, 0); kn.add(rg); }
+  }
+  const up = grp(g, 0, hipY, 0); mon.upper = up; mon.shoulderY = hipY + 0.31 * H;
+  add(new THREE.CylinderGeometry(0.125 * H, 0.11 * H, 0.1 * H, 7), skin, up, 0, 0.05 * H, 0).scale.set(wd, 1, 0.66);
+  add(new THREE.CylinderGeometry(0.1 * H, 0.12 * H, 0.12 * H, 7), skin, up, 0, 0.14 * H, 0).scale.set(wd, 1, 0.62);
+  const chest = grp(up, 0, 0.19 * H, 0); mon.chest = chest;
+  add(new THREE.CylinderGeometry(0.165 * H, 0.115 * H, 0.15 * H, 8), skin, chest, 0, 0.075 * H, 0).scale.set(wd, 1, 0.64);
+  if (L.chain) for (const sd of [-1, 1]) { const ch = add(new THREE.TorusGeometry(0.15 * H, 0.007 * H, 4, 14), chainMat, chest, 0, 0.075 * H, 0); ch.rotation.set(Math.PI / 2, 0, sd * 0.55); ch.scale.set(1, 0.64, 1); }
+  for (const s of [-1, 1]) add(new THREE.IcosahedronGeometry(0.05 * H, 0), skin, chest, s * 0.05 * H, 0.15 * H, -0.005 * H).scale.set(1.1, 0.8, 1);
+  for (const s of [-1, 1]) {
+    const ag = grp(chest, s * 0.185 * H * wd, 0.12 * H, 0); mon.arms.push(ag);
+    const al = 0.36 * H * armL, ah = al / 2;
+    add(new THREE.IcosahedronGeometry(0.052 * H * Math.sqrt(armW), 0), amat, ag, 0, 0, 0);
+    add(limbGeo(ah, 0.042 * H * armW, 0.03 * H * armW, 1.3), amat, ag, 0, -ah / 2, 0);
+    const el = grp(ag, 0, -ah, 0); mon.elbows.push(el);
+    add(new THREE.IcosahedronGeometry(0.03 * H * armW, 0), amat, el, 0, 0, 0);
+    add(limbGeo(ah, 0.03 * H * armW, 0.022 * H * armW, 1.15), amat, el, 0, -ah / 2, 0);
+    const hs = 0.04 * H * handS, hw = grp(el, 0, -ah - 0.01 * H, 0);
+    const hmat = L.grabber ? (mon.handMat || (mon.handMat = skin.clone())) : amat;
+    mon.hands.push(add(new THREE.BoxGeometry(hs * 1.5, hs * 1.1, hs * 0.7), hmat, hw, 0, -hs * 0.45, 0));
+    const fg = grp(hw, 0, -hs * 1.0, 0); mon.fingers.push(fg);
+    if (L.grabber) {
+      for (let q = 0; q < 4; q++) {
+        const fx = (q - 1.5) * hs * 0.38, fgi = grp(fg, fx, 0, 0); fgi.rotation.z = (q - 1.5) * 0.14;
+        add(new THREE.BoxGeometry(hs * 0.28, hs * 1.7, hs * 0.3), hmat, fgi, 0, -hs * 0.85, 0);
+      }
+    } else add(new THREE.BoxGeometry(hs * 1.4, hs * 1.5, hs * 0.5), hmat, fg, 0, -hs * 0.7, 0);
+    if (L.claws) for (let q = 0; q < 3; q++) { const cl = add(new THREE.ConeGeometry(0.07 * hs, 0.7 * hs, 4), toothMat, fg, (q - 1) * hs * 0.45, -hs * 1.55, 0); cl.rotation.x = Math.PI; }
+    const th = grp(hw, -s * hs * 0.8, -hs * 0.5, hs * 0.2); th.rotation.z = s * 0.5;
+    add(new THREE.BoxGeometry(hs * 0.45, hs * 0.9, hs * 0.45), hmat, th, 0, -hs * 0.3, 0);
+    if (ringMat) { const rg2 = new THREE.Mesh(new THREE.CylinderGeometry(0.036 * H * armW * 1.5, 0.036 * H * armW * 1.5, 0.014 * H, 8), ringMat); rg2.position.set(0, -ah + 0.012 * H, 0); el.add(rg2); }
+    if (L.grabber) {
+      const gl = new THREE.Mesh(new THREE.SphereGeometry(hs * 1.1, 8, 6), new THREE.MeshBasicMaterial({ color: 0xffa030, transparent: true, opacity: 0.75, depthWrite: false, fog: false }));
+      gl.position.set(0, -hs * 0.5, hs * 0.3); gl.visible = false; hw.add(gl); (mon.glows = mon.glows || []).push(gl);
+    }
+  }
+  add(new THREE.CylinderGeometry(0.04 * H, 0.052 * H, 0.06 * H, 6), skin, chest, 0, 0.14 * H, 0);
+  const hd = grp(chest, 0, 0.145 * H, 0); hd.scale.setScalar(headS); hd.rotation.z = L.tilt || 0; mon.head = hd;
+  add(headGeo(0.078 * H), skin, hd, 0, 0.07 * H, 0.005 * H);
+  add(new THREE.IcosahedronGeometry(0.018 * H, 0), skin, hd, 0, 0.056 * H, 0.083 * H).scale.set(0.8, 1.3, 1.1);
+  for (const s of [-1, 1]) add(new THREE.IcosahedronGeometry(0.02 * H, 0), skin, hd, s * 0.072 * H, 0.066 * H, 0).scale.set(0.5, 1.2, 0.8);
+  const pupM = L.glowEyes ? new THREE.MeshBasicMaterial({ color: 0x111111 }) : blackMat, eyeM = L.glowEyes ? eyeWhite.clone() : eyeWhite;
+  if (L.glowEyes) mon.eyeMats = [pupM, eyeM];
+  for (const s of [-1, 1]) {
+    const big = (L.asym ? (s < 0 ? 1.55 : 0.72) : 1) * (L.eyeS || 1), ex = s * 0.03 * H, ey = 0.083 * H + (L.asym && s < 0 ? 0.007 * H : 0);
+    const sk = add(new THREE.SphereGeometry(0.013 * H * big, 6, 4), blackMat, hd, ex, ey, 0.071 * H); sk.scale.z = 0.55;
+    const eg = grp(hd, ex, ey, 0.073 * H); mon.eyes.push(eg);
+    add(new THREE.SphereGeometry(0.0095 * H * big, 6, 4), eyeM, eg, 0, 0, 0);
+    add(new THREE.SphereGeometry(0.0045 * H * big, 5, 4), pupM, eg, 0, 0, 0.0075 * H * big);
+    const br = add(new THREE.BoxGeometry(0.036 * H * big, 0.008 * H, 0.012 * H), skin, hd, ex, ey + 0.016 * H * big, 0.077 * H);
+    br.rotation.z = -s * (L.asym ? 0.35 : 0.18);
+  }
+  const mw = (L.mouthW || 0.06) * H;
+  const mi = add(new THREE.BoxGeometry(mw * 0.95, 0.03 * H, 0.05 * H), blackMat, hd, 0, 0.032 * H, 0.04 * H);
+  mon.mouth = add(new THREE.BoxGeometry(mw, 0.012 * H, 0.01 * H), blackMat, hd, 0, 0.041 * H, 0.081 * H);
+  const jaw = grp(hd, 0, 0.035 * H, 0); mon.jaw = jaw;
+  add(new THREE.IcosahedronGeometry(0.05 * H, 0), skin, jaw, 0, -0.017 * H, 0.032 * H).scale.set(1.05, 0.55, 1.0);
+  if (L.teeth) {
+    const n = Math.max(4, Math.round(mw / (0.012 * H)));
+    for (let i = 0; i < n; i++) {
+      const tx = -mw / 2 + mw / n * (i + 0.5);
+      add(new THREE.BoxGeometry(mw / n * 0.8, 0.008 * H, 0.008 * H), toothMat, hd, tx, 0.036 * H, 0.083 * H);
+      add(new THREE.BoxGeometry(mw / n * 0.8, 0.008 * H, 0.008 * H), toothMat, jaw, tx, 0.004 * H, 0.076 * H);
+    }
+  }
+  if (L.asym) for (const s of [-1, 1]) {
+    const c = add(new THREE.BoxGeometry(0.02 * H, 0.006 * H, 0.008 * H), blackMat, hd, s * (mw / 2 + 0.006 * H), 0.047 * H, 0.078 * H);
+    c.rotation.z = s * 0.6;
+  }
+  add(new THREE.SphereGeometry(0.083 * H, 7, 4, 0, Math.PI * 2, 0, Math.PI * 0.5), hairMat, hd, 0, 0.08 * H, -0.008 * H);
+  mon.napeMesh = add(new THREE.SphereGeometry(0.026 * H, 6, 4), napeMat, chest, 0, 0.155 * H, -0.062 * H);
+  if (typeName === 'lunger') { mon.ring = new THREE.Mesh(new THREE.RingGeometry(0.82, 1, 40), new THREE.MeshBasicMaterial({ color: 0xd24bff, transparent: true, opacity: 0.8, side: THREE.DoubleSide, depthWrite: false, fog: false })); mon.ring.rotation.x = -Math.PI / 2; mon.ring.visible = false; scene.add(mon.ring); }
+  up.rotation.x = mon.hunch;
+  g.position.set(x, 0, z); g.rotation.y = mon.yaw; scene.add(g); g.updateMatrixWorld(true);
+  monsters.push(mon); monsterMeshes.push(...mon.meshes);
+  return mon;
+}
+
+function waveList(w) {
+  const fixed = [null, ['normal', 'normal'], ['normal', 'normal', 'grabber'], ['normal', 'grabber', 'lunger', 'lunger'],
+    ['normal', 'grabber', 'lunger', 'flinger', 'flinger'], ['normal', 'flinger', 'climber', 'climber', 'raider']];
+  if (w < fixed.length) return fixed[w];
+  const pool = ['normal', 'normal', 'grabber', 'lunger', 'flinger', 'climber', 'giant'];
+  const n = Math.min(3 + Math.floor(w / 2), 8), out = [];
+  for (let i = 0; i < n; i++) out.push(pool[(Math.random() * pool.length) | 0]);
+  if (Math.random() < 0.6) out.push('raider');
+  return out;
+}
+
+function spawnWave() {
+  wave++;
+  const intros = [];
+  for (const type of waveList(wave)) {
+    const a = Math.random() * Math.PI * 2, R = rnd(340, 390);
+    makeMonster(type, Math.cos(a) * R, Math.sin(a) * R);
+    if (!seen[type] && TYPES[type].intro) { seen[type] = true; intros.push('新巨人 · ' + TYPES[type].intro); }
+  }
+  waveState = 'active';
+  msg('第 ' + wave + ' 波 · 巨人来袭!' + (intros.length ? '\n' + intros.join('\n') : ''), intros.length ? 5200 : 2200);
+  tone(90, 60, 0.8, 'sawtooth', 0.22);
+}
+
+function napeWorld(m) { return m.napeMesh.getWorldPosition(V3(0, 0, 0)); }
+
+function killMonster(m, spd) {
+  if (grab && grab.m === m) grab = null;
+  m.dead = true; m.deadT = 0; m.deadFrom = m.g.rotation.x; m.state = 'dead'; if (m.ring) m.ring.visible = false;
+  monsterMeshes = monsterMeshes.filter(x => x.userData.monster !== m);
+  for (const h of H) if (h.monster === m) releaseHook(h);
+  const gain = 100 + Math.floor(spd * 6); score += gain;
+  const nw = napeWorld(m);
+  emit(nw, 40, 18, 1.4); emit(V3(m.g.position.x, m.baseY + m.H * 0.5, m.g.position.z), 50, 22, m.H * 0.09);
+  ts = 0.28; shake = 1; noiseBurst(0.5, 300, 'lowpass', 0.5); tone(120, 28, 0.9, 'sawtooth', 0.35);
+  msg('击杀!  +' + gain, 1600);
+}
+
+function nearestStation(x, z) {
+  let best = null, bd = 1e9;
+  for (const s of stations) { if (s.off > 0) continue; const d = Math.hypot(s.x - x, s.z - z); if (d < bd) { bd = d; best = s; } }
+  return best;
+}
+function supportHeight(x, z, r) {
+  let top = 0;
+  for (const b of buildings) if (x + r > b.minX && x - r < b.maxX && z + r > b.minZ && z - r < b.maxZ) top = Math.max(top, b.h);
+  return top;
+}
+
+function stepMonsters(dt) {
+  for (let i = monsters.length - 1; i >= 0; i--) {
+    const m = monsters[i], g = m.g, H_ = m.H;
+    if (m.dead) {
+      m.deadT += dt;
+      g.rotation.x = m.deadFrom + (1.5 - m.deadFrom) * (1 - Math.exp(-m.deadT * 2.2));
+      m.airY = Math.max(0, m.airY - 30 * dt); g.position.y = m.baseY + m.airY;
+      for (const l of m.legs) l.rotation.x *= 0.9;
+      if (Math.random() < dt * 14) emit(napeWorld(m), 1, 6, 1.2);
+      if (m.deadT > 6) { scene.remove(g); if (m.ring) scene.remove(m.ring); monsters.splice(i, 1); }
+      g.updateMatrixWorld(true);
+      continue;
+    }
+    const relY = P.pos.y - m.baseY;
+    let tx = P.pos.x, tz = P.pos.z, chase = true;
+    if (m.type === 'raider') {
+      if (!m.target || m.target.off > 0) m.target = nearestStation(g.position.x, g.position.z);
+      if (m.target) { tx = m.target.x; tz = m.target.z; chase = false; }
+    }
+    const dx = tx - g.position.x, dz = tz - g.position.z, dist = Math.hypot(dx, dz);
+    const pdist = Math.hypot(P.pos.x - g.position.x, P.pos.z - g.position.z);
+    let diff = Math.atan2(dx, dz) - m.yaw;
+    if (m.type === 'lunger' || m.type === 'raider') { m.wob += dt; diff += Math.sin(m.wob * 2.3) * 0.7 + Math.sin(m.wob * 5.1) * 0.25; }
+    diff = Math.atan2(Math.sin(diff), Math.cos(diff));
+    const pdiff = (() => { const d = Math.atan2(P.pos.x - g.position.x, P.pos.z - g.position.z) - m.yaw; return Math.atan2(Math.sin(d), Math.cos(d)); })();
+    const turning = m.state === 'walk' || m.state === 'attack' || m.state === 'reach' || m.state === 'crouch' || m.state === 'warn';
+    if (turning) m.yaw += Math.max(-m.turn * dt, Math.min(m.turn * dt, diff));
+    const fx = Math.sin(m.yaw), fz = Math.cos(m.yaw);
+    m.atkCd -= dt;
+    let moveK = 0;
+    if (m.state === 'walk') {
+      if (dist > (chase ? 0.3 * H_ : 5)) moveK = 1;
+      if (m.type === 'raider' && !chase && dist < 7) { m.state = 'smash'; m.t = 0; moveK = 0; msg('补给点被攻击!先拦住无视型', 1800); tone(300, 150, 0.4, 'square', 0.2); }
+      else if (m.type === 'lunger' && pdist < 0.95 * H_ && pdist > 0.25 * H_ && m.atkCd <= 0 && relY < 0.6 * H_ && Math.abs(pdiff) < 0.6) {
+        m.state = 'crouch'; m.t = 0; tone(900, 1600, 0.5, 'sawtooth', 0.14); noiseBurst(0.4, 2200, 'bandpass', 0.22);
+      } else if (m.type === 'grabber' && !grab && P.invul <= 0 && pdist < 0.55 * H_ && relY > 0.22 * H_ && relY < 1.15 * H_ && Math.abs(pdiff) < 1.0 && m.atkCd <= 0) {
+        m.state = 'warn'; m.t = 0; m.hit = false; warnFlash = 1;
+        noiseBurst(0.5, 160, 'lowpass', 0.5); tone(130, 55, 0.7, 'sawtooth', 0.3);
+        if (pdist < 2.2 * H_) msg('抓捕型要出手了!快躲开', 1200);
+      } else if (chase && m.type !== 'lunger' && pdist < 0.46 * H_ && Math.abs(pdiff) < 0.9 && m.atkCd <= 0 && relY < 0.8 * H_ && relY > -2) {
+        m.state = 'attack'; m.t = 0; m.hit = false;
+      }
+    } else if (m.state === 'attack') {
+      m.t += dt;
+      if (!m.hit && m.t >= 0.95) {
+        m.hit = true;
+        const hx = g.position.x + fx * 0.3 * H_, hz = g.position.z + fz * 0.3 * H_;
+        if (Math.hypot(P.pos.x - hx, P.pos.z - hz) < 0.34 * H_ + 4 && relY < 0.8 * H_ && relY > -2) hurtPlayer(m.dmg, fx, fz);
+      }
+      if (m.t >= 1.5) { m.state = 'walk'; m.atkCd = 2.2; }
+    } else if (m.state === 'warn') {
+      m.t += dt;
+      if (pdist > 0.75 * H_ || P.invul > 0) { m.state = 'walk'; m.atkCd = 1.2; }
+      else if (m.t >= 0.65) { m.state = 'reach'; m.t = 0; }
+    } else if (m.state === 'reach') {
+      m.t += dt;
+      if (m.t >= 0.5 && m.t <= 0.75 && !m.hit) {
+        const hp = m.hands[1].getWorldPosition(tmpV);
+        if (!grab && P.invul <= 0 && hp.distanceTo(V3(P.pos.x, P.pos.y + 1, P.pos.z)) < 0.15 * H_ + 4.5) { m.hit = true; startGrab(m); }
+      }
+      if (m.state === 'reach' && m.t >= 1.1) { m.state = 'walk'; m.atkCd = 2.5; m.hit = false; }
+    } else if (m.state === 'hold') {
+      // 由 stepGrab 控制
+    } else if (m.state === 'crouch') {
+      m.t += dt;
+      { const lx0 = P.pos.x - g.position.x, lz0 = P.pos.z - g.position.z, ll0 = Math.hypot(lx0, lz0) || 1, rch = Math.min(1.05 * H_, ll0 + 6);
+        m.ring.position.set(g.position.x + lx0 / ll0 * rch, 0.25, g.position.z + lz0 / ll0 * rch); }
+      if (m.t >= 0.55) {
+        m.state = 'leap'; m.t = 0; m.hit = false;
+        m.from = g.position.clone();
+        const lx = P.pos.x - g.position.x, lz = P.pos.z - g.position.z, ll = Math.hypot(lx, lz) || 1;
+        const reach = Math.min(1.05 * H_, ll + 6);
+        m.to = V3(g.position.x + lx / ll * reach, 0, g.position.z + lz / ll * reach);
+        m.yaw = Math.atan2(lx, lz); m.ring.position.set(m.to.x, 0.25, m.to.z);
+        tone(70, 140, 0.4, 'sawtooth', 0.2);
+      }
+    } else if (m.state === 'leap') {
+      m.t += dt; const k = Math.min(1, m.t / 0.8);
+      g.position.x = m.from.x + (m.to.x - m.from.x) * k; g.position.z = m.from.z + (m.to.z - m.from.z) * k;
+      m.airY = 4 * 0.28 * H_ * k * (1 - k);
+      if (!m.hit) {
+        const c = V3(g.position.x + fx * 0.25 * H_, m.baseY + m.airY + 0.5 * H_, g.position.z + fz * 0.25 * H_);
+        if (c.distanceTo(V3(P.pos.x, P.pos.y + 1, P.pos.z)) < 0.28 * H_ + 2) { m.hit = true; hurtPlayer(m.dmg, fx, fz); }
+      }
+      if (k >= 1) { m.state = 'prone'; m.t = 0; m.airY = 0; shake = Math.max(shake, 0.5); noiseBurst(0.4, 180, 'lowpass', 0.4); }
+    } else if (m.state === 'prone') {
+      m.t += dt; if (m.t >= 2.8) { m.state = 'rise'; m.t = 0; }
+    } else if (m.state === 'rise') {
+      m.t += dt; if (m.t >= 0.6) { m.state = 'walk'; m.atkCd = 1.5; }
+    } else if (m.state === 'smash') {
+      m.t += dt;
+      if (Math.random() < dt * 4) { shake = Math.max(shake, Math.max(0, 0.5 - pdist / 300)); noiseBurst(0.2, 150, 'lowpass', 0.25); }
+      if (m.t >= 3.5) {
+        if (m.target) { m.target.off = 45; msg('补给点被破坏!45 秒后恢复', 2200); tone(200, 60, 0.6, 'square', 0.2); }
+        m.target = null; m.state = 'walk';
+      }
+    } else if (m.state === 'yank') {
+      m.t += dt; if (m.t >= 0.7) { m.state = 'walk'; m.atkCd = 1.5; }
+    } else if (m.state === 'stun') {
+      m.t -= dt; if (m.t <= 0) m.state = 'walk';
+    }
+    if (moveK) {
+      let sp = m.speed;
+      if (m.type === 'climber' && m.baseY < supportHeight(g.position.x + fx * 0.12 * H_, g.position.z + fz * 0.12 * H_, 0.06 * H_) - 0.5) sp *= 0.35;
+      g.position.x += fx * sp * dt; g.position.z += fz * sp * dt;
+      m.phase += dt * (sp / H_) * 34;
+    }
+    // 与建筑:爬墙型爬上去,其他被挡开
+    const r = 0.1 * H_;
+    if (m.type === 'climber') {
+      const top = supportHeight(g.position.x, g.position.z, 0.06 * H_); m.ctop = top;
+      if (m.baseY < top) m.baseY = Math.min(top, m.baseY + 9 * dt); else m.baseY = Math.max(top, m.baseY - 22 * dt);
+    } else if (m.state !== 'leap') {
+      for (const b of buildings) {
+        const cx = Math.max(b.minX, Math.min(g.position.x, b.maxX)), cz = Math.max(b.minZ, Math.min(g.position.z, b.maxZ));
+        const ddx = g.position.x - cx, ddz = g.position.z - cz, dd = Math.hypot(ddx, ddz);
+        if (dd < r) {
+          if (dd > 1e-4) { g.position.x += ddx / dd * (r - dd); g.position.z += ddz / dd * (r - dd); }
+          else g.position.x += r;
+        }
+      }
+    }
+    // 特效:巨型脚步/蒸汽,无视型尘土,爬墙型抓墙,扑击落点圈
+    if (m.ring) { const on = m.state === 'crouch' || m.state === 'leap'; m.ring.visible = on; if (on) { const rr = 0.28 * H_ + 2; m.ring.scale.set(rr, rr, rr); m.ring.material.opacity = 0.5 + 0.4 * Math.sin(performance.now() / 60); } }
+    if (m.type === 'giant') {
+      m.steamT = (m.steamT || 0) - dt;
+      if (m.steamT <= 0) { m.steamT = 0.14; emit(V3(g.position.x + rnd(-6, 6), m.baseY + 0.5 * H_, g.position.z + rnd(-4, 4)), 2, 5, 2.2); }
+      const fs = Math.floor(m.phase / Math.PI);
+      if (moveK && fs !== m.lastFs) {
+        m.lastFs = fs;
+        const k = Math.max(0, 1 - pdist / 280);
+        if (k > 0) { shake = Math.max(shake, k * 0.7); noiseBurst(0.3, 120, 'lowpass', 0.5 * k); tone(55, 30, 0.3, 'sine', 0.35 * k); }
+        emit(V3(g.position.x, 0.5, g.position.z), 4, 6, 1.6, 0xb59f85);
+      }
+    } else if (m.type === 'raider' && moveK) {
+      m.dustT = (m.dustT || 0) - dt; if (m.dustT <= 0) { m.dustT = 0.07; emit(V3(g.position.x, 0.6, g.position.z), 1, 3, 1.8, 0xb59f85); }
+    } else if (m.type === 'climber') {
+      m.climbing = m.baseY < (m.ctop || 0) - 0.3;
+      if (m.climbing) {
+        m.scrT = (m.scrT || 0) - dt;
+        if (m.scrT <= 0) {
+          m.scrT = 0.22; const k = Math.max(0, 1 - pdist / 200);
+          noiseBurst(0.1, 3200, 'highpass', 0.18 * k);
+          emit(V3(g.position.x + fx * 0.1 * H_, m.baseY + 0.7 * H_, g.position.z + fz * 0.1 * H_), 2, 4, 0.8, 0xb59f85);
+          if (!m.warned && pdist < 140) { m.warned = true; msg('爬墙型正在爬楼!', 1500); }
+        }
+      }
+    }
+    // 动画
+    g.rotation.y = m.yaw;
+    const s = Math.sin(m.phase), stride = m.type === 'raider' || m.type === 'lunger' ? 0.8 : 0.55;
+    m.legs[0].rotation.x = s * stride; m.legs[1].rotation.x = -s * stride;
+    m.arms[0].rotation.x = -s * 0.4; m.arms[1].rotation.x = s * 0.4;
+    m.arms[0].rotation.z = 0; m.arms[1].rotation.z = 0;
+    if (m.type === 'raider' && m.state === 'walk') { m.arms[0].rotation.z = -0.6 + Math.sin(m.wob * 9) * 0.6; m.arms[1].rotation.z = 0.6 + Math.sin(m.wob * 7) * 0.6; m.arms[0].rotation.x = -1.2 + s; }
+    if (m.type === 'grabber' && m.state === 'walk') { m.arms[0].rotation.x = -0.9 - s * 0.3; m.arms[1].rotation.x = -0.9 + s * 0.3; }
+    if (m.type === 'lunger' && m.state === 'walk') { m.arms[0].rotation.x = -0.9 + s * 0.7; m.arms[1].rotation.x = -0.9 - s * 0.7; }
+    if (m.climbing) { const cs = Math.sin(m.phase * 2); m.arms[0].rotation.x = -2.5 + cs * 0.4; m.arms[1].rotation.x = -2.5 - cs * 0.4; }
+    let rotX = 0, rotZ = 0;
+    if (m.type === 'lunger' || m.type === 'raider') rotZ = Math.sin(m.wob * 3.1) * 0.08;
+    if (m.climbing) rotX = 0.2;
+    if (m.state === 'attack') {
+      const k = m.t < 0.8 ? m.t / 0.8 : 1;
+      m.arms[1].rotation.x = m.t < 0.8 ? -2.7 * k : -2.7 + 3.1 * Math.min(1, (m.t - 0.8) / 0.18);
+    } else if (m.state === 'warn') {
+      const k = Math.min(1, m.t / 0.4); m.arms[1].rotation.x = -1.6 * k; m.arms[0].rotation.x = -1.0 * k; m.head.rotation.x = -0.25 * k;
+    } else if (m.state === 'reach') {
+      if (m.t < 0.5) { // 出手前持续瞄准,之后锁定方向(可以躲)
+        const fwd = (P.pos.x - g.position.x) * fx + (P.pos.z - g.position.z) * fz;
+        m.aim = Math.atan2(-Math.max(0, fwd), -(P.pos.y + 1 - (m.baseY + m.shoulderY))) + m.hunch * 0;
+      }
+      const k = Math.min(1, m.t / 0.55);
+      m.arms[1].rotation.x = (m.aim || -2) * k - m.hunch * k; m.head.rotation.x = -0.4 * k;
+    } else if (m.state === 'hold') {
+      m.arms[1].rotation.x = grab && grab.phase === 'bite' ? -2.2 - 0.5 * Math.min(1, grab.t / 0.7) : -1.7;
+      m.arms[1].rotation.z = grab && grab.phase === 'bite' ? 0.5 * Math.min(1, grab.t / 0.7) : 0;
+    } else if (m.state === 'crouch') {
+      rotX = 0.35 * Math.min(1, m.t / 0.55); m.arms[0].rotation.x = m.arms[1].rotation.x = -0.6;
+    } else if (m.state === 'leap') {
+      rotX = 0.35 + 0.85 * Math.min(1, m.t / 0.8); m.arms[0].rotation.x = m.arms[1].rotation.x = -2.6;
+      m.legs[0].rotation.x = m.legs[1].rotation.x = 0.5;
+    } else if (m.state === 'prone') {
+      rotX = 1.35; m.arms[0].rotation.x = m.arms[1].rotation.x = -2.8; m.legs[0].rotation.x = m.legs[1].rotation.x = 0;
+    } else if (m.state === 'rise') {
+      rotX = 1.35 * (1 - m.t / 0.6);
+    } else if (m.state === 'smash') {
+      const p = Math.abs(Math.sin(m.t * 6)); rotX = 0.3 * p;
+      m.arms[0].rotation.x = m.arms[1].rotation.x = -2.6 + 2.4 * p;
+    } else if (m.state === 'yank') {
+      const k = Math.min(1, m.t / 0.3); m.arms[0].rotation.x = m.arms[1].rotation.x = -2.2 + 1.8 * k;
+    } else if (m.state === 'stun') rotX = 0.12 * Math.sin(m.t * 30);
+    // 关节:膝、肘、手指、下颚、脊椎、眼球
+    {
+      const ea = (o, v, k) => { o.rotation.x += (v - o.rotation.x) * Math.min(1, dt * (k || 16)); };
+      const st = m.state, c = Math.cos(m.phase), wk = moveK ? 1 : 0.25;
+      let k0 = 0.12 + 0.85 * Math.max(0, -c) * wk, k1 = 0.12 + 0.85 * Math.max(0, c) * wk;
+      let e0 = -0.2 - 0.5 * Math.max(0, s), e1 = -0.2 - 0.5 * Math.max(0, -s);
+      let f = -0.5, jw = 0.04 + (m.type === 'lunger' || m.type === 'raider' ? 0.2 : 0), cr = 0, cy = s * 0.1 * wk, jawDirect = false;
+      if (m.type === 'raider' && st === 'walk') { e0 = -0.7 + Math.sin(m.wob * 9) * 0.5; e1 = -0.7 + Math.sin(m.wob * 7) * 0.5; f = -0.2; }
+      if (st === 'attack') {
+        const k = Math.min(1, m.t / 0.8), sl = Math.min(1, Math.max(0, (m.t - 0.8) / 0.18));
+        e1 = -1.1 * k + 1.0 * sl; f = -1.3; jw = 0.5 * k; cr = m.t < 0.8 ? -0.35 * k : -0.35 + 0.9 * sl; k0 = k1 = 0.2;
+      } else if (st === 'warn') {
+        e0 = -0.3; e1 = -0.1; f = 0.05; jw = 0.45; cr = 0.1;
+      } else if (st === 'reach') {
+        const k = Math.min(1, m.t / 0.55); e1 = -0.05; f = -0.05; jw = 0.45 * k; cr = 0.12 * k; e0 = -0.5;
+      } else if (st === 'hold') {
+        const bite = grab && grab.phase === 'bite';
+        e1 = bite ? -0.9 : -0.3; f = -1.4 + (grab && !bite ? grab.prog * 0.9 : 0); cr = bite ? 0.2 : 0; jw = 0.1;
+        if (bite) {
+          const bt = grab.t; jw = bt < 0.75 ? 0.95 * Math.min(1, bt / 0.5) : Math.max(0, 0.95 - (bt - 0.75) * 9 * 0.95); jawDirect = true;
+        }
+      } else if (st === 'crouch') { k0 = k1 = 0.9 * Math.min(1, m.t / 0.55); e0 = e1 = -0.5; f = -1.2; cr = 0.3 * Math.min(1, m.t / 0.55); jw = 0.3; }
+      else if (st === 'leap') { k0 = k1 = 0.3; e0 = e1 = -0.15; f = -0.05; jw = 0.9; cr = -0.2; }
+      else if (st === 'prone') { k0 = k1 = 0.25; e0 = e1 = -0.25; f = -0.8; jw = 0.15; }
+      else if (st === 'smash') { const p = Math.abs(Math.sin(m.t * 6)); e0 = e1 = -1.0 + 0.9 * p; f = -1.3; cr = 0.4 * p; jw = 0.5; }
+      else if (st === 'yank') { e0 = e1 = -0.6; f = -1.3; jw = 0.3; }
+      for (let i = 0; i < 2; i++) { ea(m.fingers[i], f); }
+      if (m.glows) {
+        const on = st === 'warn' || (st === 'reach' && m.t < 0.8), pulse = 0.6 + 0.4 * Math.sin(m.t * 30);
+        for (const gl of m.glows) { gl.visible = on; if (on) { gl.material.opacity = 0.75 * pulse; gl.scale.setScalar(1 + 0.3 * pulse); } }
+        m.handMat.color.setHex(st === 'hold' ? 0x8f2420 : 0xdb8d62);
+      }
+      ea(m.knees[0], k0, 20); ea(m.knees[1], k1, 20); ea(m.elbows[0], e0, 20); ea(m.elbows[1], e1, 20);
+      if (jawDirect) m.jaw.rotation.x = jw; else ea(m.jaw, jw, 12);
+      ea(m.chest, cr, 12); m.chest.rotation.y = cy;
+      const pd = P.pos.y - (m.baseY + 0.62 * H_), ep = Math.max(-0.5, Math.min(0.5, Math.atan2(pd, pdist)));
+      const nt = TYPES[m.type].look.noTrack;
+      for (const e of m.eyes) { if (nt) { e.rotation.y = Math.sin(m.wob * 3 + 1) * 0.4; e.rotation.x = Math.sin(m.wob * 2.3) * 0.3; } else { e.rotation.y = Math.max(-0.5, Math.min(0.5, pdiff)); e.rotation.x = -ep; } }
+      if (m.type === 'raider') m.head.rotation.y = Math.sin(m.wob * 6) * 0.5 * (st === 'walk' ? 1 : 0.2);
+      if (m.eyeMats) { const on = st === 'crouch' || st === 'leap'; m.eyeMats[0].color.setHex(on ? 0xd24bff : 0x111111); m.eyeMats[1].color.setHex(on ? 0xeab8ff : 0xe6e0d0); }
+      if (m.armMat) {
+        let heat = 0; for (const hk of H) if (hk.active && hk.monster === m) heat = Math.max(heat, Math.min(1, (hk.holdT - 0.4) / 0.9));
+        m.armMat.color.copy(m.baseCol).lerp(heatRed, heat);
+        if (heat > 0.15 && Math.random() < dt * 25) emit(m.hands[1].getWorldPosition(tmpV), 1, 4, 0.9, 0x555555);
+      }
+    }
+    if (m.state !== 'reach') m.head.rotation.x *= 0.9;
+    g.rotation.x = rotX; g.rotation.z = rotZ;
+    const bob = (m.state === 'walk' && moveK) ? Math.abs(s) * 0.012 * H_ : 0;
+    g.position.y = m.baseY + m.airY + bob;
+    g.updateMatrixWorld(true);
+    // 玩家与躯干碰撞
+    const br = 0.13 * H_ + HW;
+    if (!grab && relY < 0.82 * H_ && relY > -2 && m.state !== 'prone' && m.state !== 'leap') {
+      const px = P.pos.x - g.position.x, pz = P.pos.z - g.position.z, pd = Math.hypot(px, pz);
+      if (pd < br && pd > 1e-4) {
+        const nx = px / pd, nz = pz / pd;
+        P.pos.x += nx * (br - pd); P.pos.z += nz * (br - pd);
+        const vn = P.vel.x * nx + P.vel.z * nz; if (vn < 0) { P.vel.x -= nx * vn; P.vel.z -= nz * vn; }
+      }
+    }
+  }
+  if (waveState === 'active' && !monsters.some(m => !m.dead)) { waveState = 'break'; waveTimer = 4; msg('第 ' + wave + ' 波清除!', 2400); }
+}
+
+/* ================= 抓捕 / 咬 ================= */
+function startGrab(m) {
+  grab = { m, t: 0, prog: 0, phase: 'hold', bitten: false };
+  m.state = 'hold'; m.t = 0;
+  for (const h of H) releaseHook(h);
+  P.vel.set(0, 0, 0); shake = 0.8;
+  noiseBurst(0.3, 220, 'lowpass', 0.5); tone(160, 60, 0.4, 'sawtooth', 0.3);
+  msg('被抓住了!狂按 E 挣脱', 2600);
+}
+function struggle() {
+  if (!grab || grab.phase !== 'hold') return;
+  grab.prog = Math.min(1, grab.prog + 0.11); shake = Math.max(shake, 0.3);
+  noiseBurst(0.06, 900, 'bandpass', 0.15);
+}
+function stepGrab(dt) {
+  const m = grab.m;
+  if (m.dead) { grab = null; return; }
+  grab.t += dt; P.vel.set(0, 0, 0); P.onGround = false;
+  if (grab.phase === 'hold') {
+    if (grab.prog < 1) grab.prog = Math.max(0, grab.prog - 0.22 * dt);
+    const hp = m.hands[1].getWorldPosition(tmpV);
+    P.pos.set(hp.x, hp.y - 1.0, hp.z);
+    if (grab.prog >= 1) {
+      let ax = P.pos.x - m.g.position.x, az = P.pos.z - m.g.position.z; const al = Math.hypot(ax, az) || 1;
+      P.vel.set(ax / al * 18, 10, az / al * 18); P.invul = 1.2;
+      m.state = 'stun'; m.t = 2.0; m.atkCd = 3;
+      grab = null; msg('挣脱了!快反击', 1500); tone(500, 900, 0.2, 'square', 0.15);
+      return;
+    }
+    if (grab.t >= 2.6) { grab.phase = 'bite'; grab.t = 0; grab.from = P.pos.clone(); }
+  } else {
+    const k = Math.min(1, grab.t / 0.7), H_ = m.H;
+    const mw = m.mouth.getWorldPosition(V3(0, 0, 0));
+    const fx = Math.sin(m.yaw), fz = Math.cos(m.yaw);
+    const tgt = V3(mw.x + fx * 0.11 * H_, mw.y - EYE, mw.z + fz * 0.11 * H_);
+    P.pos.copy(grab.from).lerp(tgt, k * k * (3 - 2 * k));
+    const ex = mw.x - P.pos.x, ey = mw.y - (P.pos.y + EYE), ez = mw.z - P.pos.z;
+    P.yaw = Math.atan2(-ex, -ez); P.pitch = Math.atan2(ey, Math.hypot(ex, ez));
+    if (!grab.bitten && grab.t >= 0.75) {
+      grab.bitten = true; biteFlash = 1;
+      noiseBurst(0.35, 120, 'lowpass', 0.7); tone(90, 30, 0.4, 'square', 0.4);
+      dealDamage(55);
+    }
+    if (grab && grab.t >= 1.1) {
+      P.vel.set(fx * 8, 2, fz * 8); P.invul = 1.6;
+      m.state = 'walk'; m.atkCd = 4; grab = null;
+    }
+  }
+}
+function dealDamage(d) {
+  if (state !== 'playing') return;
+  P.hp -= d; dmgFlash = 1; shake = 1;
+  if (P.hp <= 0) { P.hp = 0; grab = null; gameOver(); }
+}
+function hurtPlayer(d, fx, fz) {
+  if (P.invul > 0 || state !== 'playing' || grab) return;
+  P.hp -= d; P.invul = 0.7; dmgFlash = 1; shake = 0.8;
+  P.vel.x += fx * 16; P.vel.z += fz * 16; P.vel.y += 9; P.onGround = false;
+  noiseBurst(0.3, 200, 'lowpass', 0.5); tone(80, 40, 0.3, 'square', 0.3);
+  if (P.hp <= 0) { P.hp = 0; gameOver(); }
+}
+
+/* ================= 钩索 ================= */
+const UP = V3(0, 1, 0);
+const handLocal = [V3(-0.34, -0.28, -0.5), V3(0.34, -0.28, -0.5)];
+const ropeGeo = new THREE.CylinderGeometry(0.03, 0.03, 1, 5);
+const ropeMat = new THREE.MeshBasicMaterial({ color: 0xe6e6e6 });
+const H = [0, 1].map(() => {
+  const mesh = new THREE.Mesh(ropeGeo, ropeMat.clone()); mesh.visible = false; mesh.frustumCulled = false; scene.add(mesh);
+  return { active: false, anchor: V3(0, 0, 0), len: 0, monster: null, local: V3(0, 0, 0), mesh, holdT: 0 };
+});
+function releaseHook(h) { h.active = false; h.monster = null; h.mesh.visible = false; h.holdT = 0; h.mesh.material.color.setHex(0xe6e6e6); }
+
+function camDir() {
+  const cp = Math.cos(P.pitch);
+  return V3(-Math.sin(P.yaw) * cp, Math.sin(P.pitch), -Math.cos(P.yaw) * cp);
+}
+function rayBox(o, d, b) {
+  let t0 = 0, t1 = 1e9, inv, a, c, t;
+  inv = 1 / d.x; a = (b.minX - o.x) * inv; c = (b.maxX - o.x) * inv; if (a > c) { t = a; a = c; c = t; } t0 = Math.max(t0, a); t1 = Math.min(t1, c); if (t0 > t1) return -1;
+  inv = 1 / d.y; a = (0 - o.y) * inv; c = (b.h - o.y) * inv; if (a > c) { t = a; a = c; c = t; } t0 = Math.max(t0, a); t1 = Math.min(t1, c); if (t0 > t1) return -1;
+  inv = 1 / d.z; a = (b.minZ - o.z) * inv; c = (b.maxZ - o.z) * inv; if (a > c) { t = a; a = c; c = t; } t0 = Math.max(t0, a); t1 = Math.min(t1, c); if (t0 > t1) return -1;
+  return t0 > 0.05 ? t0 : -1;
+}
+const raycaster = new THREE.Raycaster();
+function castRay(o, d, maxD) {
+  let best = null, bt = maxD;
+  for (const b of buildings) { const t = rayBox(o, d, b); if (t > 0 && t < bt) { bt = t; best = { t, point: o.clone().addScaledVector(d, t), monster: null }; } }
+  if (monsterMeshes.length) {
+    raycaster.set(o, d); raycaster.far = bt;
+    const hits = raycaster.intersectObjects(monsterMeshes, false);
+    if (hits.length && hits[0].distance < bt) best = { t: hits[0].distance, point: hits[0].point.clone(), monster: hits[0].object.userData.monster };
+  }
+  return best;
+}
+function fireHook(i) {
+  const h = H[i]; if (h.active) releaseHook(h);
+  const r = castRay(V3(P.pos.x, P.pos.y + EYE, P.pos.z), camDir(), HOOK_RANGE);
+  if (grab || !r) { if (!r) tone(300, 200, 0.08, 'square', 0.05); return; }
+  h.active = true; h.anchor.copy(r.point); h.monster = r.monster; h.holdT = 0;
+  if (r.monster) h.local.copy(r.monster.g.worldToLocal(r.point.clone()));
+  h.len = Math.max(2, V3(P.pos.x, P.pos.y + 1.4, P.pos.z).distanceTo(r.point));
+  tone(220, 90, 0.12, 'square', 0.12); noiseBurst(0.08, 1800, 'highpass', 0.1);
+}
+
+/* ================= 玩家物理 ================= */
+function stepPlayer(dt) {
+  if (grab) { stepGrab(dt); P.invul = Math.max(0, P.invul - dt); return; }
+  const sy = Math.sin(P.yaw), cy = Math.cos(P.yaw);
+  const fx = -sy, fz = -cy, rx = cy, rz = -sy;
+  let wx = 0, wz = 0;
+  if (keys.KeyW) { wx += fx; wz += fz; } if (keys.KeyS) { wx -= fx; wz -= fz; }
+  if (keys.KeyD) { wx += rx; wz += rz; } if (keys.KeyA) { wx -= rx; wz -= rz; }
+  const wl = Math.hypot(wx, wz); if (wl > 0) { wx /= wl; wz /= wl; }
+  if (P.onGround) {
+    let dx = wx * RUN - P.vel.x, dz = wz * RUN - P.vel.z; const dl = Math.hypot(dx, dz), md = (wl > 0 ? 60 : 30) * dt;
+    if (dl > md) { dx *= md / dl; dz *= md / dl; } P.vel.x += dx; P.vel.z += dz;
+  } else if (wl > 0) {
+    const cur = P.vel.x * wx + P.vel.z * wz, add = Math.min(14 * dt, Math.max(0, 16 - cur));
+    P.vel.x += wx * add; P.vel.z += wz * add;
+  }
+  if (jumpReq) { jumpReq = false; if (P.onGround) { P.vel.y = 10; P.onGround = false; } }
+  const dir = camDir();
+  if ((keys.ShiftLeft || keys.ShiftRight) && P.gas > 0) { P.vel.addScaledVector(dir, 38 * dt); P.gas -= 15 * dt; }
+  const anyHook = H[0].active || H[1].active;
+  if (keys.Space && anyHook) {
+    const c = V3(P.pos.x, P.pos.y + 1.4, P.pos.z);
+    for (const h of H) if (h.active) {
+      h.len = Math.max(2, h.len - 26 * dt);
+      P.vel.addScaledVector(h.anchor.clone().sub(c).normalize(), 30 * dt);
+    }
+  }
+  if (P.gas < 0) P.gas = 0;
+  P.vel.y -= GRAV * dt;
+  if (!P.onGround) P.vel.multiplyScalar(Math.exp(-0.1 * dt));
+  const sp = P.vel.length(); if (sp > 75) P.vel.multiplyScalar(75 / sp);
+  P.pos.addScaledVector(P.vel, dt);
+  // 钩索约束
+  for (const h of H) {
+    if (!h.active) continue;
+    if (h.monster) {
+      if (h.monster.dead) { releaseHook(h); continue; }
+      h.anchor.copy(h.local).applyMatrix4(h.monster.g.matrixWorld);
+      if (h.monster.type === 'flinger' && h.monster.state !== 'stun') {
+        h.holdT += dt;
+        if (h.holdT > 0.6) { h.beep = (h.beep || 0) - dt; if (h.beep <= 0) { tone(1000 + h.holdT * 500, 900 + h.holdT * 500, 0.05, 'square', 0.07); h.beep = Math.max(0.07, 0.3 - (h.holdT - 0.6) * 0.32); } } else h.beep = 0;
+        h.mesh.material.color.setHex(h.holdT > 0.6 && Math.floor(h.holdT * 12) % 2 === 0 ? 0xff2a2a : 0xe6e6e6);
+        if (h.holdT > 1.3) {
+          const m = h.monster; releaseHook(h);
+          let ax = P.pos.x - m.g.position.x, az = P.pos.z - m.g.position.z; const al = Math.hypot(ax, az) || 1;
+          const side = Math.random() < 0.5 ? -1 : 1;
+          P.vel.set((ax / al) * 30 - (az / al) * 14 * side, 13, (az / al) * 30 + (ax / al) * 14 * side);
+          P.onGround = false; flungT = 1.6; m.state = 'yank'; m.t = 0; shake = 0.7;
+          msg('被甩飞了!', 1200); noiseBurst(0.3, 400, 'bandpass', 0.4);
+          continue;
+        }
+      }
+    }
+    const c = V3(P.pos.x, P.pos.y + 1.4, P.pos.z), diff = c.sub(h.anchor), dist = diff.length();
+    if (dist > h.len && dist > 1e-4) {
+      diff.multiplyScalar(1 / dist);
+      P.pos.addScaledVector(diff, -(dist - h.len));
+      const rad = P.vel.dot(diff); if (rad > 0) P.vel.addScaledVector(diff, -rad);
+    }
+  }
+  // 挂索高速摆荡时缓慢回气
+  if (anyHook && !P.onGround) { const sv = P.vel.length(); if (sv > 12) P.gas = Math.min(100, P.gas + Math.min(9, (sv - 12) * 0.5) * dt); }
+  // 建筑碰撞:多轮解算,直到不再重叠
+  const preSp = P.vel.length(), wasGround = P.onGround;
+  P.onGround = false;
+  const overlaps = (x, y, z, b) => x + HW > b.minX && x - HW < b.maxX && z + HW > b.minZ && z - HW < b.maxZ && y < b.h && y + PH > 0;
+  const spaceFree = (x, y, z) => { for (const o of buildings) if (o.h > y + 0.001 && overlaps(x, y, z, o)) return false; return true; };
+  let mantled = false;
+  for (let pass = 0; pass < 6; pass++) {
+    let any = false;
+    for (const b of buildings) {
+      if (!overlaps(P.pos.x, P.pos.y, P.pos.z, b)) continue;
+      any = true;
+      const oxL = P.pos.x + HW - b.minX, oxR = b.maxX - (P.pos.x - HW);
+      const ozL = P.pos.z + HW - b.minZ, ozR = b.maxZ - (P.pos.z - HW);
+      const oy = b.h - P.pos.y, ox = Math.min(oxL, oxR), oz = Math.min(ozL, ozR);
+      if (oy <= ox && oy <= oz) { P.pos.y = b.h; if (P.vel.y < 0) P.vel.y = 0; P.onGround = true; }
+      else if (!mantled && oy <= 3.2 && (keys.KeyW || keys.Space) && spaceFree(P.pos.x, b.h + 0.01, P.pos.z)) {
+        P.pos.y = b.h + 0.01; if (P.vel.y < 0) P.vel.y = 0; camLag = Math.max(-1.2, camLag - oy * 0.5); P.onGround = true; mantled = true;
+      }
+      else if (ox < oz) { if (oxL < oxR) { P.pos.x -= oxL; if (P.vel.x > 0) P.vel.x = 0; } else { P.pos.x += oxR; if (P.vel.x < 0) P.vel.x = 0; } }
+      else { if (ozL < ozR) { P.pos.z -= ozL; if (P.vel.z > 0) P.vel.z = 0; } else { P.pos.z += ozR; if (P.vel.z < 0) P.vel.z = 0; } }
+    }
+    if (!any) break;
+    if (pass === 5) { // 兜底:仍卡住就抬到重叠盒子的最高顶面
+      let top = P.pos.y;
+      for (const b of buildings) if (overlaps(P.pos.x, P.pos.y, P.pos.z, b)) top = Math.max(top, b.h);
+      P.pos.y = top + 0.01; if (P.vel.y < 0) P.vel.y = 0; P.onGround = true;
+    }
+  }
+  if (P.pos.y <= 0) { P.pos.y = 0; if (P.vel.y < 0) P.vel.y = 0; P.onGround = true; }
+  if (flungT > 0) { flungT -= dt; if (preSp - P.vel.length() > 16) { flungT = 0; P.invul = 0; dealDamage(15); msg('撞上了!', 900); } }
+  P.pos.x = Math.max(-700, Math.min(700, P.pos.x)); P.pos.z = Math.max(-700, Math.min(700, P.pos.z));
+  if (P.onGround && P.gas < 100) P.gas = Math.min(100, P.gas + 10 * dt);
+  P.invul = Math.max(0, P.invul - dt);
+}
+
+/* ================= 挥刀 ================= */
+function doSlash() {
+  if (slashCd > 0 || state !== 'playing') return;
+  slashCd = 0.38; slashT = 0; slashHand ^= 1;
+  const el = $('slash'); el.classList.remove('go'); void el.offsetWidth; el.classList.add('go');
+  noiseBurst(0.14, 2500, 'highpass', 0.25);
+  if (P.blade <= 0) { msg('刀刃已损毁!前往绿色补给点', 1600); return; }
+  const spd = P.vel.length(), dir = camDir(), cam = V3(P.pos.x, P.pos.y + EYE, P.pos.z), reach = Math.min(20, 10 + spd * 0.15);
+  let best = null, bd = 1e9;
+  for (const m of monsters) {
+    if (m.dead) continue;
+    const to = napeWorld(m).sub(cam), d = to.length();
+    if (d < reach && to.multiplyScalar(1 / d).dot(dir) > 0.7 && d < bd) { bd = d; best = m; }
+  }
+  if (!best) return;
+  const m = best, fx = Math.sin(m.yaw), fz = Math.cos(m.yaw);
+  let px = P.pos.x - m.g.position.x, pz = P.pos.z - m.g.position.z; const pl = Math.hypot(px, pz) || 1; px /= pl; pz /= pl;
+  if (m.state !== 'prone' && m.state !== 'rise' && px * fx + pz * fz > 0.45) { msg('正面被挡住!绕到它背后', 1400); tone(900, 700, 0.1, 'square', 0.12); P.blade = Math.max(0, P.blade - 4); return; }
+  const dmg = 25 + spd * 3.4; m.hp -= dmg; P.blade = Math.max(0, P.blade - 12);
+  tone(1200, 400, 0.12, 'sawtooth', 0.2);
+  if (m.hp <= 0) killMonster(m, spd);
+  else { if (m.state !== 'leap' && m.state !== 'prone' && m.state !== 'hold') { m.state = 'stun'; m.t = 0.9; } shake = 0.5; emit(napeWorld(m), 12, 10, 1); msg(spd < 12 ? '命中后颈 — 速度不足,威力偏弱' : '命中后颈!', 1300); }
+}
+
+/* ================= 流程 ================= */
+function resetGame() {
+  for (const m of monsters) { scene.remove(m.g); if (m.ring) scene.remove(m.ring); }
+  monsters.length = 0; monsterMeshes = []; grab = null; flungT = 0; warnFlash = 0;
+  for (const s of stations) { s.off = 0; s.mat.color.setHex(0x5dffa0); s.mat.opacity = 0.45; }
+  for (const k in seen) delete seen[k];
+  for (const h of H) releaseHook(h);
+  P.pos.set(30, 0, 30); P.vel.set(0, 0, 0); P.yaw = 0.8; P.pitch = 0; P.hp = 100; P.gas = 100; P.blade = 100; P.invul = 0; P.onGround = true;
+  wave = 0; score = 0; waveState = 'idle'; ts = 1; acc = 0;
+  spawnWave();
+}
+function gameOver() {
+  state = 'dead'; if (document.pointerLockElement) document.exitPointerLock();
+  for (const k in keys) keys[k] = false;
+  showOverlay('dead');
+}
+function showOverlay(kind) {
+  const ctl = '<ul><li><b>鼠标</b>转视角</li><li><b>左/右键</b>发射左/右钩索</li><li><b>空格</b>收绳 / 地面起跳</li><li><b>Shift</b>喷气加速</li><li><b>WASD</b>移动</li><li><b>E</b>挥刀(斩后颈)</li></ul>';
+  let h;
+  if (kind === 'start') h = '<h1>钢索猎手</h1><p>原创第一人称原型。在高塔城区间用钩索飞行,绕到巨型怪物背后,以足够的速度斩击它的后颈(发光处)。</p>' + ctl +
+    '<p class="small">撞墙时离边缘不远按 W 或空格会自动翻上去。正面斩击会被挡住;速度越快伤害越高;收绳不耗气,喷气才耗气,挂着钩索高速摆荡会缓慢回气;绿色光柱是补给点,补充气体、刀刃和生命。钩索也能钩在怪物身上。需要键盘和鼠标。</p><div class="go">点击开始</div>';
+  else if (kind === 'pause') h = '<h1>已暂停</h1>' + ctl + '<div class="go">点击继续</div>';
+  else h = '<h1>你倒下了</h1><p>坚持到第 ' + wave + ' 波,得分 ' + score + '。</p><div class="go">点击重新开始</div>';
+  $('panel').innerHTML = h; $('overlay').classList.remove('hide');
+}
+function requestLock() { try { const p = canvas.requestPointerLock(); if (p && p.catch) p.catch(() => {}); } catch (e) {} }
+function startGame() {
+  initAudio();
+  if (state === 'menu' || state === 'dead') { resetGame(); }
+  state = 'playing'; $('overlay').classList.add('hide');
+  try { window.focus(); canvas.tabIndex = 0; canvas.focus(); } catch (e) {}
+  gotKey = false; setTimeout(() => { if (state === 'playing' && !gotKey) msg('没收到键盘输入:请再点一下画面,并把输入法切到英文', 6000); }, 5000);
+  requestLock();
+  setTimeout(() => { if (state === 'playing' && !locked) { fallback = true; msg('未能锁定鼠标:鼠标离屏幕中心越远,转向越快(Esc 暂停)', 3500); } }, 400);
+}
+function pauseGame() {
+  if (state !== 'playing') return;
+  state = 'paused'; for (const k in keys) keys[k] = false; showOverlay('pause');
+}
+$('overlay').addEventListener('click', () => { if (state === 'paused') { initAudio(); state = 'playing'; $('overlay').classList.add('hide'); if (!fallback) requestLock(); } else startGame(); });
+
+document.addEventListener('pointerlockchange', () => {
+  locked = document.pointerLockElement === canvas;
+  if (locked) fallback = false;
+  else if (state === 'playing' && !fallback) pauseGame();
+});
+addEventListener('mousemove', e => {
+  mouse.x = e.clientX; mouse.y = e.clientY;
+  if (state === 'playing' && locked) {
+    P.yaw -= e.movementX * 0.0022; P.pitch = Math.max(-1.5, Math.min(1.5, P.pitch - e.movementY * 0.0022));
+  }
+});
+addEventListener('mousedown', e => {
+  if (state !== 'playing') return;
+  if (e.button === 0) fireHook(0); else if (e.button === 2) fireHook(1);
+});
+addEventListener('mouseup', e => { if (e.button === 0) releaseHook(H[0]); else if (e.button === 2) releaseHook(H[1]); });
+addEventListener('contextmenu', e => e.preventDefault());
+let gotKey = false;
+const KEYMAP = { w: 'KeyW', a: 'KeyA', s: 'KeyS', d: 'KeyD', e: 'KeyE', ' ': 'Space', shift: 'ShiftLeft', escape: 'Escape' };
+const codeOf = e => (e.code && e.code !== 'Unidentified') ? e.code : (KEYMAP[(e.key || '').toLowerCase()] || e.code);
+addEventListener('keydown', e => {
+  const code = codeOf(e); gotKey = true;
+  if (['Space', 'ArrowUp', 'ArrowDown'].includes(code)) e.preventDefault();
+  keys[code] = true;
+  if (state !== 'playing') return;
+  if (code === 'Space' && !e.repeat) jumpReq = true;
+  if (code === 'KeyE' && !e.repeat) { if (grab) struggle(); else doSlash(); }
+  if (code === 'Escape' && fallback) pauseGame();
+});
+addEventListener('keyup', e => { keys[codeOf(e)] = false; });
+addEventListener('blur', () => { for (const k in keys) keys[k] = false; });
+addEventListener('resize', () => { renderer.setSize(innerWidth, innerHeight); camera.aspect = innerWidth / innerHeight; camera.updateProjectionMatrix(); });
+
+/* ================= 持刀模型(第一人称) ================= */
+const blades = [0, 1].map(i => {
+  const g = new THREE.Group();
+  const bm = new THREE.MeshPhongMaterial({ color: 0xcfd6de, shininess: 80, depthTest: false });
+  const hm = new THREE.MeshPhongMaterial({ color: 0x2b2b30, depthTest: false });
+  const blade = new THREE.Mesh(new THREE.BoxGeometry(0.012, 0.08, 0.85), bm); blade.position.z = -0.5;
+  const handle = new THREE.Mesh(new THREE.BoxGeometry(0.035, 0.05, 0.22), hm); handle.position.z = -0.02;
+  blade.renderOrder = handle.renderOrder = 999; g.add(blade, handle);
+  g.position.set(i ? 0.3 : -0.3, -0.3, -0.35);
+  g.rotation.set(-0.45, i ? -0.12 : 0.12, 0); camera.add(g); return g;
+});
+
+/* ================= 主循环 ================= */
+const radar = $('radar'), rg = radar.getContext('2d');
+function drawRadar() {
+  rg.clearRect(0, 0, 150, 150);
+  rg.lineWidth = 1;
+  rg.fillStyle = '#0b1522aa'; rg.beginPath(); rg.arc(75, 75, 74, 0, 7); rg.fill();
+  rg.strokeStyle = '#ffffff25'; rg.beginPath(); rg.arc(75, 75, 37, 0, 7); rg.stroke();
+  const sy = Math.sin(P.yaw), cy = Math.cos(P.yaw), sc = 70 / 420;
+  const pt = (x, z) => {
+    const dx = x - P.pos.x, dz = z - P.pos.z;
+    let u = dx * cy - dz * sy, v = dx * -sy + dz * -cy; // right, forward
+    const l = Math.hypot(u, v), mx = 70; let px = u * sc, py = v * sc, pl = Math.hypot(px, py);
+    if (pl > mx) { px *= mx / pl; py *= mx / pl; }
+    return [75 + px, 75 - py, l * sc > mx];
+  };
+  for (const s of stations) { const [x, y] = pt(s.x, s.z); rg.fillStyle = s.off > 0 ? '#ff3030' : '#5dffa0'; rg.fillRect(x - 3, y - 3, 6, 6); }
+  for (const m of monsters) {
+    if (m.dead) continue; const [x, y, edge] = pt(m.g.position.x, m.g.position.z);
+    const big = m.type === 'giant' ? 6 : 4.5;
+    rg.globalAlpha = edge ? 0.6 : 1; rg.fillStyle = TYPES[m.type].radar; rg.beginPath(); rg.arc(x, y, edge ? 3 : big, 0, 7); rg.fill(); rg.globalAlpha = 1;
+    if (m.type === 'raider' && m.target) { const [sx2, sy3] = pt(m.target.x, m.target.z); rg.strokeStyle = m.state === 'smash' && Math.floor(performance.now() / 180) % 2 ? '#ff3030' : '#ffffff88'; rg.lineWidth = m.state === 'smash' ? 2.5 : 1; rg.beginPath(); rg.moveTo(x, y); rg.lineTo(sx2, sy3); rg.stroke(); }
+  }
+  rg.fillStyle = '#fff'; rg.beginPath(); rg.moveTo(75, 68); rg.lineTo(70, 80); rg.lineTo(80, 80); rg.closePath(); rg.fill();
+}
+const els = { hp: $('hp'), gas: $('gas'), blade: $('blade'), wave: $('wave'), score: $('score'), left: $('left'), dmg: $('dmg') };
+
+function update(dt, dtReal) {
+  if (fallback) {
+    const nx = (mouse.x - innerWidth / 2) / (innerWidth / 2), ny = (mouse.y - innerHeight / 2) / (innerHeight / 2);
+    const dz = v => Math.abs(v) < 0.12 ? 0 : (v - Math.sign(v) * 0.12) / 0.88;
+    P.yaw -= dz(nx) * 2.4 * dtReal; P.pitch = Math.max(-1.5, Math.min(1.5, P.pitch - dz(ny) * 1.5 * dtReal));
+  }
+  acc += dt; let n = 0;
+  while (acc >= STEP && n < 12) { stepPlayer(STEP); stepMonsters(STEP); acc -= STEP; n++; }
+  if (n >= 12) acc = 0;
+  updateParts(dt);
+  slashCd -= dt; slashT += dtReal;
+  // 补给
+  for (const s of stations) {
+    s.ring.rotation.z += dt * 1.2;
+    if (s.off > 0) { s.off -= dt; s.mat.color.setHex(0xff3030); s.mat.opacity = 0.25; if (s.off <= 0) { s.mat.color.setHex(0x5dffa0); s.mat.opacity = 0.45; msg('补给点已恢复', 1500); } continue; }
+    if (Math.hypot(P.pos.x - s.x, P.pos.z - s.z) < 7 && P.pos.y < 22) {
+      if (P.gas < 100 || P.blade < 100 || P.hp < 100) {
+        P.gas = Math.min(100, P.gas + 60 * dt); P.blade = Math.min(100, P.blade + 50 * dt); P.hp = Math.min(100, P.hp + 12 * dt);
+      }
+    }
+  }
+  if (waveState === 'break') { waveTimer -= dt; if (waveTimer <= 0) spawnWave(); }
+  // 风声
+  const spd = P.vel.length();
+  if (AC && windGain) { windGain.gain.value += (Math.min(0.28, Math.max(0, spd - 6) / 120) - windGain.gain.value) * 0.1; windFilter.frequency.value = 300 + spd * 22; }
+}
+
+function updateCamera(dtReal) {
+  shake = Math.max(0, shake - dtReal * 2.2);
+  const sx = (Math.random() - 0.5) * shake * 0.35, sy2 = (Math.random() - 0.5) * shake * 0.35;
+  camLag *= Math.exp(-dtReal * 12);
+  camera.position.set(P.pos.x + sx, P.pos.y + EYE + sy2 + camLag, P.pos.z);
+  camera.rotation.set(P.pitch, P.yaw, 0);
+  const spd = P.vel.length(), tf = 72 + Math.min(spd, 60) * 0.4;
+  camera.fov += (tf - camera.fov) * Math.min(1, dtReal * 6); camera.updateProjectionMatrix();
+  camera.updateMatrixWorld(true);
+  sky.position.copy(camera.position);
+  // 持刀动画
+  for (let i = 0; i < 2; i++) {
+    const b = blades[i], act = (i === slashHand) && slashT < 0.25;
+    const s = act ? Math.sin(Math.PI * slashT / 0.25) : 0, side = i ? -1 : 1;
+    b.rotation.set(-0.45 + 0.7 * s, (i ? -0.12 : 0.12) + side * 1.1 * s * -1, side * 0.5 * s);
+  }
+  // 钩索可视
+  for (let i = 0; i < 2; i++) {
+    const h = H[i]; if (!h.active) continue;
+    if (h.monster && !h.monster.dead) h.anchor.copy(h.local).applyMatrix4(h.monster.g.matrixWorld);
+    const a = camera.localToWorld(handLocal[i].clone()), d = h.anchor.clone().sub(a), len = d.length();
+    h.mesh.position.copy(a).addScaledVector(d, 0.5); h.mesh.quaternion.setFromUnitVectors(UP, d.multiplyScalar(1 / len));
+    h.mesh.scale.set(1, len, 1); h.mesh.visible = true;
+  }
+}
+
+function updateHud(dtReal) {
+  els.hp.style.width = P.hp + '%'; els.gas.style.width = P.gas + '%'; els.blade.style.width = P.blade + '%';
+  els.wave.textContent = '第 ' + wave + ' 波'; els.score.textContent = '得分 ' + score;
+  els.left.textContent = '怪物 ' + monsters.filter(m => !m.dead).length;
+  biteFlash = Math.max(0, biteFlash - dtReal * 0.9); $('bite').style.opacity = biteFlash;
+  const holding = !!grab && grab.phase === 'hold';
+  $('grabbar').style.display = holding ? 'block' : 'none'; if (grab) $('grabfill').style.width = (grab.prog * 100) + '%';
+  $('grabtxt').style.display = holding ? 'block' : 'none'; if (holding) $('grabtxt').textContent = '连按 E 挣脱  ' + Math.min(10, Math.round(grab.prog * 10)) + ' / 10';
+  $('grabvig').style.opacity = grab ? 1 : 0;
+  warnFlash = Math.max(0, warnFlash - dtReal * 1.8); $('warn').style.opacity = warnFlash;
+  dmgFlash = Math.max(0, dmgFlash - dtReal * 1.6); els.dmg.style.opacity = dmgFlash + (P.hp < 30 ? 0.25 : 0);
+  hookHint -= dtReal;
+  if (hookHint <= 0) { hookHint = 0.08; crossEl.classList.toggle('ok', !!castRay(V3(P.pos.x, P.pos.y + EYE, P.pos.z), camDir(), HOOK_RANGE)); }
+  drawRadar();
+}
+
+function frame(now) {
+  requestAnimationFrame(frame);
+  const dtReal = Math.min(0.05, (now - last) / 1000); last = now;
+  if (state === 'playing') {
+    ts += (1 - ts) * Math.min(1, dtReal * 2.2);
+    update(dtReal * ts, dtReal); updateCamera(dtReal); updateHud(dtReal);
+  } else if (AC && windGain) windGain.gain.value = 0;
+  renderer.render(scene, camera);
+}
+
+// 调试/测试接口
+window.__dbg = { P, H, monsters, buildings, fireHook, doSlash, camDir, get state() { return state; }, get wave() { return wave; }, get score() { return score; },
+  get fallback() { return fallback; }, makeMonster, keys, get grab() { return grab; }, stations, struggle, startGrab, TYPES, step: n => { for (let i = 0; i < n; i++) { stepPlayer(STEP); stepMonsters(STEP); } updateCamera(1 / 60); } };
+
+showOverlay('start');
+camera.position.set(P.pos.x, EYE, P.pos.z); P.yaw = 0.8; camera.rotation.set(0, P.yaw, 0);
+requestAnimationFrame(frame);
+})();
+</script>
+</body>
+</html>
